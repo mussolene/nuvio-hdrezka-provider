@@ -16,7 +16,7 @@
 2. Добавьте адрес репозитория:
 
    ```text
-   https://raw.githubusercontent.com/mussolene/nuvio-hdrezka-provider/main/dist/plugins.json
+   https://raw.githubusercontent.com/mussolene/nuvio-hdrezka-provider/main/dist/repository.json
    ```
 
 3. Обновите репозиторий и включите провайдер HDRezka.

@@ -36,7 +36,9 @@ jobs:
 
           root = Path("dist")
           manifest = json.loads((root / "plugins.json").read_text())
+          repository = json.loads((root / "repository.json").read_text())
           assert len(manifest) == 1
+          assert repository["pluginLists"] == ["plugins.json?channel=stable"]
           plugin = manifest[0]
           package = root / "HDRezkaNuvio.cs3"
           assert package.is_file()
@@ -52,3 +54,4 @@ jobs:
           path: |
             dist/HDRezkaNuvio.cs3
             dist/plugins.json
+            dist/repository.json

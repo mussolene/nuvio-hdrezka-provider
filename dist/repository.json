@@ -1,0 +1,7 @@
+{
+  "name": "HDRezka для Nuvio",
+  "description": "Фильмы и сериалы HDRezka с озвучками, субтитрами и доступными вариантами качества",
+  "pluginLists": [
+    "plugins.json?channel=stable"
+  ]
+}
