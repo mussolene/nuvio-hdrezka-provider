@@ -16,10 +16,10 @@ jobs:
 
     steps:
       - name: Получить исходный код
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Настроить Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
@@ -46,7 +46,7 @@ jobs:
           PY
 
       - name: Сохранить пакет сборки
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: HDRezkaNuvio
           path: |
