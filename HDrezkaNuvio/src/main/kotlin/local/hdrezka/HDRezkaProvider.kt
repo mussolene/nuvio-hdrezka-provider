@@ -11,6 +11,62 @@ import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Element
 import java.util.*
+
+internal data class HDRezkaSearchCard(
+    val title: String,
+    val href: String,
+    val posterUrl: String,
+    val type: HDRezkaSearchType,
+    val year: Int?,
+    val episode: Int?
+)
+
+internal enum class HDRezkaSearchType { MOVIE, SERIES }
+
+internal object HDRezkaSearchParser {
+    private val yearPattern = Regex("\\b(?:19|20)\\d{2}\\b")
+
+    fun card(element: Element): HDRezkaSearchCard? {
+        val title = element.selectFirst("div.b-content__inline_item-link > a")
+            ?.text()
+            ?.trim()
+            .orEmpty()
+        val href = element.selectFirst("a[href]")?.attr("href")?.trim().orEmpty()
+        if (title.isEmpty() || href.isEmpty()) return null
+
+        val metadata = element.selectFirst("div.b-content__inline_item-link > div")
+            ?.text()
+            .orEmpty()
+        val type = if (element.select("span.info").isNotEmpty()) {
+            HDRezkaSearchType.SERIES
+        } else {
+            HDRezkaSearchType.MOVIE
+        }
+        val episode = element.select("span.info")
+            .text()
+            .substringAfter(",")
+            .replace(Regex("[^0-9]"), "")
+            .toIntOrNull()
+
+        return HDRezkaSearchCard(
+            title = title,
+            href = href,
+            posterUrl = element.selectFirst("img[src]")?.attr("src").orEmpty(),
+            type = type,
+            year = yearPattern.find(metadata)?.value?.toIntOrNull(),
+            episode = episode
+        )
+    }
+
+    fun originalTitle(element: Element): String? = element
+        .selectFirst("div.b-post__origtitle")
+        ?.text()
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+
+    fun needsOriginalTitle(query: String): Boolean = query.any { it in 'A'..'Z' || it in 'a'..'z' }
+}
+
 class HDRezkaProvider : MainAPI() {
     override var mainUrl = HDRezkaHttp.BASE_URL
     override var name = "HDRezka"
@@ -23,28 +79,18 @@ class HDRezkaProvider : MainAPI() {
         TvType.AsianDrama
     )
 
-    private fun Element.toSearchResult(): SearchResponse {
-        val title =
-            this.selectFirst("div.b-content__inline_item-link > a")?.text()?.trim().toString()
-        val href = this.selectFirst("a")?.attr("href").toString()
-        val posterUrl = this.select("img").attr("src")
-        val type = if (this.select("span.info").isNotEmpty()) TvType.TvSeries else TvType.Movie
-        return if (type == TvType.Movie) {
-            newMovieSearchResponse(title, href, TvType.Movie) {
-                this.posterUrl = posterUrl
+    private fun HDRezkaSearchCard.toSearchResult(titleOverride: String? = null): SearchResponse {
+        val responseTitle = titleOverride ?: title
+        return if (type == HDRezkaSearchType.MOVIE) {
+            newMovieSearchResponse(responseTitle, href, TvType.Movie) {
+                this.posterUrl = this@toSearchResult.posterUrl
+                this.year = this@toSearchResult.year
             }
         } else {
-            val episode =
-                this.select("span.info").text().substringAfter(",").replace(Regex("[^0-9]"), "")
-                    .toIntOrNull()
-            newAnimeSearchResponse(title, href, TvType.TvSeries) {
-                this.posterUrl = posterUrl
-                addDubStatus(
-                    dubExist = true,
-                    dubEpisodes = episode,
-                    subExist = true,
-                    subEpisodes = episode
-                )
+            newTvSeriesSearchResponse(responseTitle, href, TvType.TvSeries) {
+                this.posterUrl = this@toSearchResult.posterUrl
+                this.year = this@toSearchResult.year
+                this.episodes = episode
             }
         }
     }
@@ -54,9 +100,22 @@ class HDRezkaProvider : MainAPI() {
         val link = "$mainUrl/search/?do=search&subaction=search&q=$query"
         val document = HDRezkaHttp.getDocument(link)
 
-        return document.select("div.b-content__inline_items div.b-content__inline_item").map {
-            it.toSearchResult()
+        val cards = document
+            .select("div.b-content__inline_items div.b-content__inline_item")
+            .mapNotNull(HDRezkaSearchParser::card)
+        if (cards.isEmpty()) return emptyList()
+
+        val results = cards.map { it.toSearchResult() }.toMutableList()
+        if (HDRezkaSearchParser.needsOriginalTitle(query)) {
+            val firstCard = cards.first()
+            val originalTitle = HDRezkaSearchParser.originalTitle(
+                HDRezkaHttp.getDocument(firstCard.href)
+            )
+            if (originalTitle != null && !originalTitle.equals(firstCard.title, ignoreCase = true)) {
+                results.add(0, firstCard.toSearchResult(originalTitle))
+            }
         }
+        return results
     }
 
     override suspend fun load(url: String): LoadResponse {
