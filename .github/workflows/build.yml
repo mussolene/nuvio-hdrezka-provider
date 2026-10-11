@@ -1,0 +1,54 @@
+name: Проверка сборки
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Получить исходный код
+        uses: actions/checkout@v4
+
+      - name: Настроить Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Проверить и собрать провайдер
+        run: ./gradlew --no-daemon -Pkotlin.incremental=false :HDrezkaNuvio:testDebugUnitTest :HDrezkaNuvio:make
+
+      - name: Проверить публичный манифест
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("dist")
+          manifest = json.loads((root / "plugins.json").read_text())
+          assert len(manifest) == 1
+          plugin = manifest[0]
+          package = root / "HDRezkaNuvio.cs3"
+          assert package.is_file()
+          assert plugin["fileSize"] == package.stat().st_size
+          assert "127.0.0.1" not in plugin["url"]
+          assert "127.0.0.1" not in plugin["repositoryUrl"]
+          PY
+
+      - name: Сохранить пакет сборки
+        uses: actions/upload-artifact@v4
+        with:
+          name: HDRezkaNuvio
+          path: |
+            dist/HDRezkaNuvio.cs3
+            dist/plugins.json
