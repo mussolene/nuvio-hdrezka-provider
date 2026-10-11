@@ -2,8 +2,6 @@ package local.hdrezka
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.utils.AppUtils.toJson
-import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
@@ -197,7 +195,7 @@ class HDRezkaProvider : MainAPI() {
                     data["server"] = server
                     data["action"] = "get_stream"
 
-                    newEpisode(data.toJson()) {
+                    newEpisode(mapper.writeValueAsString(data)) {
                         this.name = name
                         this.season = season
                         this.episode = episode
@@ -225,7 +223,7 @@ class HDRezkaProvider : MainAPI() {
             data["server"] = server
             data["action"] = "get_movie"
 
-            newMovieLoadResponse(title, url, TvType.Movie, data.toJson()) {
+            newMovieLoadResponse(title, url, TvType.Movie, mapper.writeValueAsString(data)) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = description
@@ -357,14 +355,14 @@ class HDRezkaProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
 
-        tryParseJson<Data>(data)?.let { res ->
+        mapper.readValue(data, Data::class.java)?.let { res ->
             if (res.server?.isEmpty() == true) {
                 val document = HDRezkaHttp.getDocument(res.ref ?: return@let)
                 document.select("script").map { script ->
                     if (script.data().contains("sof.tv.initCDNMoviesEvents(")) {
                         val dataJson =
                             script.data().substringAfter("false, {").substringBefore("});")
-                        tryParseJson<LocalSources>("{$dataJson}")?.let { source ->
+                        mapper.readValue("{$dataJson}", LocalSources::class.java)?.let { source ->
                             invokeSources(
                                 this.name,
                                 source.streams,
@@ -397,7 +395,7 @@ class HDRezkaProvider : MainAPI() {
                         referer = res.ref,
                         cookies = HDRezkaSession.cookies()
                     )
-                    tryParseJson<Sources>(response.text)?.let { source ->
+                    mapper.readValue(response.text, Sources::class.java)?.let { source ->
                         invokeSources(
                             server.translator_name.toString(),
                             source.url,

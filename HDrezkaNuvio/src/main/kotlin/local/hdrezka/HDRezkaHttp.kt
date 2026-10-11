@@ -2,8 +2,8 @@ package local.hdrezka
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import android.util.Log
+import com.lagradost.cloudstream3.mapper
 import com.lagradost.cloudstream3.app
-import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jsoup.nodes.Document
@@ -35,14 +35,14 @@ internal object HDRezkaHttp {
         val challenge = response.document.selectFirst("#anubis_challenge")?.text()?.trim()
         if (challenge.isNullOrEmpty()) return response.document
 
-        val payload = tryParseJson<AnubisChallenge>(challenge)
+        val payload = mapper.readValue(challenge, AnubisChallenge::class.java)
             ?: error("Не удалось прочитать проверку Anubis")
         val startedAt = System.currentTimeMillis()
         val solution = withContext(Dispatchers.Default) {
             AnubisProofOfWork.solve(payload.challenge.randomData, payload.rules.difficulty)
         }
         val prefixRaw = response.document.selectFirst("#anubis_base_prefix")?.text()?.trim()
-        val prefix = prefixRaw?.let { tryParseJson<String>(it) }.orEmpty()
+        val prefix = prefixRaw?.let { mapper.readValue(it, String::class.java) }.orEmpty()
         val origin = URI(url).let { "${it.scheme}://${it.authority}" }
         val passUrl = buildString {
             append(origin)
@@ -95,7 +95,7 @@ internal object HDRezkaHttp {
             cookies = HDRezkaSession.cookies()
         )
         HDRezkaSession.mergeCookies(response.cookies)
-        val result = tryParseJson<LoginResponse>(response.text)
+        val result = mapper.readValue(response.text, LoginResponse::class.java)
         val hasSession = HDRezkaSession.hasSession()
         Log.d(
             "HDRezkaAuth",

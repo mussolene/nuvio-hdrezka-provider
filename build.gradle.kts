@@ -72,6 +72,7 @@ subprojects {
         implementation("com.github.Blatzar:NiceHttp:0.4.16")
         implementation("org.jsoup:jsoup:1.22.1")
         implementation("com.fasterxml.jackson.core:jackson-annotations:2.20")
+        add("compileOnly", "com.fasterxml.jackson.core:jackson-databind:2.17.0")
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
         testImplementation("junit:junit:4.13.2")
     }
