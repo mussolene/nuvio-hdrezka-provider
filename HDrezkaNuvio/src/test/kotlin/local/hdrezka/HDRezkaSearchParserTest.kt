@@ -60,4 +60,17 @@ class HDRezkaSearchParserTest {
         assertTrue(HDRezkaSearchParser.needsOriginalTitle("Backrooms"))
         assertFalse(HDRezkaSearchParser.needsOriginalTitle("Фонари"))
     }
+
+    @Test
+    fun usesRequestedLatinTitleForAnUnambiguousResult() {
+        assertEquals(
+            "Backrooms",
+            HDRezkaSearchParser.matchingTitle("Backrooms", 1, null)
+        )
+        assertEquals(
+            "Lanterns",
+            HDRezkaSearchParser.matchingTitle("Lanterns", 4, "Lanterns")
+        )
+        assertNull(HDRezkaSearchParser.matchingTitle("Фонари", 1, null))
+    }
 }

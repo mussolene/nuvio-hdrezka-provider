@@ -10,6 +10,8 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Element
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.util.*
 
 internal data class HDRezkaSearchCard(
@@ -65,6 +67,11 @@ internal object HDRezkaSearchParser {
         ?.takeIf { it.isNotEmpty() }
 
     fun needsOriginalTitle(query: String): Boolean = query.any { it in 'A'..'Z' || it in 'a'..'z' }
+
+    fun matchingTitle(query: String, resultCount: Int, originalTitle: String?): String? {
+        if (!needsOriginalTitle(query)) return null
+        return if (resultCount == 1) query.trim() else originalTitle
+    }
 }
 
 class HDRezkaProvider : MainAPI() {
@@ -97,7 +104,8 @@ class HDRezkaProvider : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse> {
 
-        val link = "$mainUrl/search/?do=search&subaction=search&q=$query"
+        val encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8.name())
+        val link = "$mainUrl/search/?do=search&subaction=search&q=$encodedQuery"
         val document = HDRezkaHttp.getDocument(link)
 
         val cards = document
@@ -108,11 +116,20 @@ class HDRezkaProvider : MainAPI() {
         val results = cards.map { it.toSearchResult() }.toMutableList()
         if (HDRezkaSearchParser.needsOriginalTitle(query)) {
             val firstCard = cards.first()
-            val originalTitle = HDRezkaSearchParser.originalTitle(
-                HDRezkaHttp.getDocument(firstCard.href)
+            val originalTitle = if (cards.size > 1) {
+                HDRezkaSearchParser.originalTitle(
+                    HDRezkaHttp.getDocument(firstCard.href)
+                )
+            } else {
+                null
+            }
+            val matchingTitle = HDRezkaSearchParser.matchingTitle(
+                query,
+                cards.size,
+                originalTitle
             )
-            if (originalTitle != null && !originalTitle.equals(firstCard.title, ignoreCase = true)) {
-                results.add(0, firstCard.toSearchResult(originalTitle))
+            if (matchingTitle != null && !matchingTitle.equals(firstCard.title, ignoreCase = true)) {
+                results.add(0, firstCard.toSearchResult(matchingTitle))
             }
         }
         return results
