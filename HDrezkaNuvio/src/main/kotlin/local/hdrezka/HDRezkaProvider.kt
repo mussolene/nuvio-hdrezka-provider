@@ -377,7 +377,7 @@ class HDRezkaProvider : MainAPI() {
                 }
             } else {
                 res.server?.map { server ->
-                    app.post(
+                    val response = app.post(
                         url = "$mainUrl/ajax/get_cdn_series/?t=${Date().time}",
                         data = mapOf(
                             "id" to res.id,
@@ -396,7 +396,8 @@ class HDRezkaProvider : MainAPI() {
                         ),
                         referer = res.ref,
                         cookies = HDRezkaSession.cookies()
-                    ).parsedSafe<Sources>()?.let { source ->
+                    )
+                    tryParseJson<Sources>(response.text)?.let { source ->
                         invokeSources(
                             server.translator_name.toString(),
                             source.url,

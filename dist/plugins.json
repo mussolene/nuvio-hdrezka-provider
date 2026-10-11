@@ -3,7 +3,7 @@
     "name": "HDRezka для Nuvio",
     "internalName": "HDrezkaNuvio",
     "description": "Чистый HDRezka: гостевой режим, озвучки, качества и локальная авторизация",
-    "version": 6,
+    "version": 7,
     "apiVersion": 1,
     "status": 1,
     "authors": [
@@ -17,8 +17,8 @@
       "Anime",
       "AsianDrama"
     ],
-    "url": "https://github.com/mussolene/nuvio-hdrezka-provider/releases/download/v1.0.2/HDRezkaNuvio.cs3",
-    "fileSize": 51228,
+    "url": "https://github.com/mussolene/nuvio-hdrezka-provider/releases/download/v1.0.3/HDRezkaNuvio.cs3",
+    "fileSize": 51687,
     "repositoryUrl": "https://raw.githubusercontent.com/mussolene/nuvio-hdrezka-provider/main/dist/plugins.json"
   }
 ]
