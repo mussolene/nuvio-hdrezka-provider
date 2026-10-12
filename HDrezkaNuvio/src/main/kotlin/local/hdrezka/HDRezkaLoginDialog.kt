@@ -11,6 +11,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
 import android.util.Log
+import java.lang.ref.WeakReference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -21,13 +22,17 @@ internal object HDRezkaLoginDialog {
     private var shown = false
     @Volatile
     private var waitingForActivity = false
+    private var activityReference = WeakReference<Activity>(null)
 
     fun showIfNeeded(context: Context) {
+        val activity = (context as? Activity) ?: activityReference.get()
+        if (activity != null && !activity.isFinishing && !activity.isDestroyed) {
+            activityReference = WeakReference(activity)
+        }
         if (shown) return
         val hasSession = HDRezkaSession.hasSession()
         Log.d("HDRezkaAuth", "prompt context=${context.javaClass.simpleName}, session=$hasSession")
         if (hasSession) return
-        val activity = context as? Activity
         if (activity != null && !activity.isFinishing && !activity.isDestroyed) {
             activity.runOnUiThread {
                 if (shown || activity.isFinishing || activity.isDestroyed) return@runOnUiThread

@@ -35,6 +35,12 @@ internal object HDRezkaHttp {
         val sentCookies = CookieCodec.decode(networkRequest.header("Cookie").orEmpty())
         Log.d("HDRezkaAuth", "http=${response.code}, stored=${storedCookies.keys.sorted()}, sent=${sentCookies.keys.sorted()}, matches=${storedCookies.all { (key, value) -> sentCookies[key] == value }}, loginForm=${response.document.selectFirst("form#check-form") != null}")
         HDRezkaSession.mergeCookies(response.cookies)
+        if (response.document.selectFirst("form#check-form") != null &&
+            storedCookies.containsKey("dle_user_id") && storedCookies.containsKey("dle_password")) {
+            HDRezkaSession.clear()
+            HDRezkaLoginDialog.showIfNeeded(HDRezkaSession.appContext)
+            error("Сеанс HDRezka истек. Войдите повторно")
+        }
         val challenge = response.document.selectFirst("#anubis_challenge")?.text()?.trim()
         if (challenge.isNullOrEmpty()) {
             check(response.isSuccessful && response.text.isNotBlank()) {
@@ -112,7 +118,9 @@ internal object HDRezkaHttp {
             "HDRezkaAuth",
             "success=${result?.success}, cookies=${response.cookies.keys.sorted()}, session=$hasSession"
         )
-        return result?.success == true && hasSession
+        if (result?.success != true || !hasSession) return false
+        val verified = getDocument("$baseUrl/")
+        return HDRezkaSession.hasSession() && verified.selectFirst("form#check-form") == null
     }
 
     private fun encoded(value: String): String =

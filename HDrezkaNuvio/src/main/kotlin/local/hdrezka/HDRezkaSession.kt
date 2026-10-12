@@ -16,7 +16,8 @@ internal object HDRezkaSession {
     private const val VALUE = "encrypted_cookie"
     private const val KEY_ALIAS = "hdrezka_nuvio_cookie_key"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
-    private lateinit var appContext: Context
+    internal lateinit var appContext: Context
+        private set
 
     fun attach(context: Context) {
         appContext = context.applicationContext
@@ -67,7 +68,7 @@ internal object HDRezkaSession {
     }
 
     fun clear() {
-        preferences().edit().remove(VALUE).apply()
+        preferences().edit().remove(VALUE).remove("prompt_process").commit()
     }
 
     private fun cookieHeader(): String {
