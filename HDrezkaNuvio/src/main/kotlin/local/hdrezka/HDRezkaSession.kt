@@ -20,6 +20,11 @@ internal object HDRezkaSession {
 
     fun attach(context: Context) {
         appContext = context.applicationContext
+        val prefs = preferences()
+        if (prefs.getString("session_origin", "https://hdrzk.org") != HDRezkaHttp.BASE_URL) {
+            prefs.edit().remove(VALUE).remove("guest_mode").remove("prompt_process")
+                .putString("session_origin", HDRezkaHttp.BASE_URL).commit()
+        }
     }
 
     fun hasSession(): Boolean {

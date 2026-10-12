@@ -8,6 +8,14 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Element
+import org.jsoup.nodes.Document
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import android.util.Log
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.*
@@ -136,6 +144,9 @@ class HDRezkaProvider : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
 
         val document = HDRezkaHttp.getDocument(url)
+        check(document.selectFirst("form#check-form") == null) {
+            "Войдите в HDRezka: сайт вернул форму авторизации"
+        }
 
         val id = url.split("/").last().split("-").first()
         val title = (document.selectFirst("div.b-post__title h1")?.text()?.trim()
@@ -156,16 +167,9 @@ class HDRezkaProvider : MainAPI() {
         data["ref"] = url
 
         return if (tvType == TvType.TvSeries) {
-            val translators = document.select("ul#translators-list li")
-            if (translators.isNotEmpty()) {
-                translators.map { res ->
-                    server.add(
-                        mapOf(
-                            "translator_name" to res.text(),
-                            "translator_id" to res.attr("data-translator_id"),
-                        )
-                    )
-                }
+            val translators = HDRezkaPageParser.translators(document)
+            if (document.select("#translators-list li[data-translator_id]").isNotEmpty()) {
+                server.addAll(translators)
             } else {
                 // Extracts the default translator_id from the init script if translation list is missing
                 document.select("script").map { script ->
@@ -189,8 +193,8 @@ class HDRezkaProvider : MainAPI() {
 
                     val name = ep.selectFirst(".b-simple_episode__title")
                         ?.text()
-                        ?.ifBlank { "Episode $episode" }
-                        ?: "Episode $episode"
+                        ?.ifBlank { "Серия $episode" }
+                        ?: "Серия $episode"
 
                     data["season"] = "$season"
                     data["episode"] = "$episode"
@@ -210,17 +214,7 @@ class HDRezkaProvider : MainAPI() {
                 this.plot = description
             }
         } else {
-            document.select("ul#translators-list li").map { res ->
-                server.add(
-                    mapOf(
-                        "translator_name" to res.text(),
-                        "translator_id" to res.attr("data-translator_id"),
-                        "camrip" to res.attr("data-camrip"),
-                        "ads" to res.attr("data-ads"),
-                        "director" to res.attr("data-director")
-                    )
-                )
-            }
+            server.addAll(HDRezkaPageParser.translators(document))
 
             data["server"] = server
             data["action"] = "get_movie"
@@ -286,8 +280,6 @@ class HDRezkaProvider : MainAPI() {
                 this.headers = buildMap {
                     putAll(HDRezkaHttp.headers())
                     put("Origin", mainUrl)
-                    val cookie = CookieCodec.encode(HDRezkaSession.cookies())
-                    if (cookie.isNotBlank()) put("Cookie", cookie)
                 }
             }
         )
@@ -326,9 +318,9 @@ class HDRezkaProvider : MainAPI() {
             links.replace("[$quality]", "").split(" or ")
                 .map {
                     val link = it.trim()
-                    val type = if(link.contains(".m3u8")) "(Main)" else "(Backup)"
+                    val type = if(link.contains(".m3u8")) "HLS" else "MP4"
                     cleanCallback(
-                        "$source $type",
+                        "$source · $quality · $type",
                         link,
                         quality,
                         link.contains(".m3u8"),
@@ -376,36 +368,52 @@ class HDRezkaProvider : MainAPI() {
                     }
                 }
             } else {
-                res.server?.map { server ->
-                    val response = app.post(
-                        url = "$mainUrl/ajax/get_cdn_series/?t=${Date().time}",
-                        data = mapOf(
-                            "id" to res.id,
-                            "translator_id" to server.translator_id,
-                            "favs" to res.favs,
-                            "is_camrip" to server.camrip,
-                            "is_ads" to server.ads,
-                            "is_director" to server.director,
-                            "season" to res.season,
-                            "episode" to res.episode,
-                            "action" to res.action,
-                        ).filterValues { it != null }.mapValues { it.value as String },
-                        headers = HDRezkaHttp.headers() + mapOf(
-                            "X-Requested-With" to "XMLHttpRequest",
-                            "Origin" to mainUrl
-                        ),
-                        referer = res.ref,
-                        cookies = HDRezkaSession.cookies()
-                    )
-                    mapper.readValue(response.text, Sources::class.java)?.let { source ->
-                        invokeSources(
-                            server.translator_name.toString(),
-                            source.url,
-                            source.subtitle.toString(),
-                            subtitleCallback,
-                            callback
-                        )
-                    }
+                val limit = Semaphore(3)
+                coroutineScope {
+                    res.server.orEmpty().map { server ->
+                        async {
+                            limit.withPermit {
+                                val response = try {
+                                    app.post(
+                                        url = "$mainUrl/ajax/get_cdn_series/?t=${Date().time}",
+                                        data = mapOf(
+                                            "id" to res.id,
+                                            "translator_id" to server.translator_id,
+                                            "favs" to res.favs,
+                                            "is_camrip" to server.camrip,
+                                            "is_ads" to server.ads,
+                                            "is_director" to server.director,
+                                            "season" to res.season,
+                                            "episode" to res.episode,
+                                            "action" to res.action,
+                                        ).filterValues { it != null }.mapValues { it.value as String },
+                                        headers = HDRezkaHttp.headers() + mapOf(
+                                            "X-Requested-With" to "XMLHttpRequest",
+                                            "Origin" to mainUrl
+                                        ),
+                                        referer = res.ref,
+                                        cookies = HDRezkaSession.cookies()
+                                    )
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    Log.w("HDRezkaStreams", "Ошибка озвучки ${server.translator_name}: ${e.javaClass.simpleName}")
+                                    return@withPermit
+                                }
+                                if (!response.isSuccessful) return@withPermit
+                                val source = mapper.readValue(response.text, Sources::class.java)
+                                val streamUrl = source.url?.takeIf { it.isNotBlank() }
+                                    ?: return@withPermit
+                                invokeSources(
+                                    server.translator_name.orEmpty(),
+                                    streamUrl,
+                                    source.subtitle.toString(),
+                                    subtitleCallback,
+                                    callback
+                                )
+                            }
+                        }
+                    }.awaitAll()
                 }
             }
         }
@@ -419,8 +427,8 @@ class HDRezkaProvider : MainAPI() {
     )
 
     data class Sources(
-        @JsonProperty("url") val url: String,
-        @JsonProperty("subtitle") val subtitle: Any?,
+        @JsonProperty("url") val url: String? = null,
+        @JsonProperty("subtitle") val subtitle: Any? = null,
     )
 
     data class Server(
@@ -441,4 +449,21 @@ class HDRezkaProvider : MainAPI() {
         @JsonProperty("ref") val ref: String?,
     )
 
+}
+
+internal object HDRezkaPageParser {
+    fun translators(document: Document): List<Map<String, String>> {
+        val premium = document.selectFirst("body.b-premium_user__body") != null
+        return document.select("#translators-list li[data-translator_id]")
+            .filter { premium || !it.hasClass("b-prem_translator") }
+            .map { item ->
+                mapOf(
+                    "translator_name" to item.text(),
+                    "translator_id" to item.attr("data-translator_id"),
+                    "camrip" to item.attr("data-camrip"),
+                    "ads" to item.attr("data-ads"),
+                    "director" to item.attr("data-director")
+                )
+            }
+    }
 }

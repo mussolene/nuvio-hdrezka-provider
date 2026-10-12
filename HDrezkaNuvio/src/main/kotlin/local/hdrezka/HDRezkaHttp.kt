@@ -13,10 +13,10 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
 internal object HDRezkaHttp {
-    const val BASE_URL = "https://hdrzk.org"
+    const val BASE_URL = "https://rezka.fi"
     private const val USER_AGENT =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Linux; Android 9; Xiaomi) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     private const val PASS_PATH = "/.within.website/x/cmd/anubis/api/pass-challenge"
 
     fun headers(): Map<String, String> = mapOf(
@@ -109,14 +109,7 @@ internal object HDRezkaHttp {
             "HDRezkaAuth",
             "success=${result?.success}, cookies=${response.cookies.keys.sorted()}, session=$hasSession"
         )
-        return result?.success == true && hasSession && validateSession(baseUrl)
-    }
-
-    suspend fun validateSession(baseUrl: String): Boolean {
-        val authenticated = getDocument("$baseUrl/")
-            .selectFirst("a[href*='/logout/']") != null
-        Log.d("HDRezkaAuth", "validated=$authenticated")
-        return authenticated
+        return result?.success == true && hasSession
     }
 
     private fun encoded(value: String): String =

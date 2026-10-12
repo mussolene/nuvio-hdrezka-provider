@@ -73,4 +73,22 @@ class HDRezkaSearchParserTest {
         )
         assertNull(HDRezkaSearchParser.matchingTitle("Фонари", 1, null))
     }
+    @Test
+    fun filtersPremiumVoicesAndPreservesDirectorVersion() {
+        val markup = """
+            <ul id="translators-list">
+              <li data-translator_id="111" class="b-prem_translator">HDrezka Studio</li>
+              <li data-translator_id="56" data-director="0">Дубляж</li>
+              <li data-translator_id="56" data-director="1">Дубляж (реж. версия)</li>
+              <li data-translator_id="481">GoLTFilm</li>
+            </ul>
+        """.trimIndent()
+        val available = HDRezkaPageParser.translators(Jsoup.parse(markup))
+        assertEquals(listOf("Дубляж", "Дубляж (реж. версия)", "GoLTFilm"),
+            available.map { it["translator_name"] })
+        assertEquals(listOf("0", "1", ""), available.map { it["director"] })
+        val premium = Jsoup.parse("<body class='b-premium_user__body'>$markup</body>")
+        assertEquals(4, HDRezkaPageParser.translators(premium).size)
+    }
+
 }

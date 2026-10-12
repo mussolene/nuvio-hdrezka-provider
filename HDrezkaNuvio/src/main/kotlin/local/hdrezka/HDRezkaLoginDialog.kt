@@ -47,7 +47,7 @@ internal object HDRezkaLoginDialog {
         }
         val dialog = AlertDialog.Builder(activity)
             .setTitle("HDRezka")
-            .setMessage("Вход необязателен. Он открывает только возможности вашей учетной записи.")
+            .setMessage("rezka.fi требует вход для просмотра. Сеанс сохраняется на телевизоре; пароль не сохраняется. Озвучки Premium доступны только с подпиской сайта.")
             .setView(content)
             .setNegativeButton("Без входа") { _, _ -> HDRezkaSession.useGuestMode() }
             .setPositiveButton("Войти", null)
