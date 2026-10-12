@@ -20,9 +20,7 @@ internal object HDRezkaHttp {
     private const val PASS_PATH = "/.within.website/x/cmd/anubis/api/pass-challenge"
 
     fun headers(): Map<String, String> = mapOf(
-        "User-Agent" to USER_AGENT,
-        "X-Hdrezka-Android-App" to "1",
-        "X-Hdrezka-Android-App-Version" to "2.2.5"
+        "User-Agent" to USER_AGENT
     )
 
     suspend fun getDocument(url: String): Document {

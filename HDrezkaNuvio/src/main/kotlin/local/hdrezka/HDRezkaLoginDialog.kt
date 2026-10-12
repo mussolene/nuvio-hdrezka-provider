@@ -24,10 +24,14 @@ internal object HDRezkaLoginDialog {
 
     fun showIfNeeded(context: Context) {
         if (shown) return
-        if (HDRezkaSession.hasSession()) return
+        val hasSession = HDRezkaSession.hasSession()
+        Log.d("HDRezkaAuth", "prompt context=${context.javaClass.simpleName}, session=$hasSession")
+        if (hasSession) return
         val activity = context as? Activity
         if (activity != null) {
-            if (HDRezkaSession.claimLoginPrompt()) show(activity)
+            val claimed = HDRezkaSession.claimLoginPrompt()
+            Log.d("HDRezkaAuth", "prompt claimed=$claimed")
+            if (claimed) show(activity)
             return
         }
         val application = context.applicationContext as? Application ?: return
