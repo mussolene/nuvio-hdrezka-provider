@@ -1,6 +1,8 @@
 package local.hdrezka
 
 import android.app.Activity
+import android.app.Application
+import android.os.Bundle
 import android.app.AlertDialog
 import android.content.Context
 import android.text.InputType
@@ -17,12 +19,33 @@ import kotlinx.coroutines.withContext
 internal object HDRezkaLoginDialog {
     @Volatile
     private var shown = false
+    @Volatile
+    private var waitingForActivity = false
 
     fun showIfNeeded(context: Context) {
         if (shown) return
-        val activity = context as? Activity ?: return
-        if (!HDRezkaSession.claimLoginPrompt()) return
-        show(activity)
+        if (HDRezkaSession.hasSession()) return
+        val activity = context as? Activity
+        if (activity != null) {
+            if (HDRezkaSession.claimLoginPrompt()) show(activity)
+            return
+        }
+        val application = context.applicationContext as? Application ?: return
+        if (waitingForActivity) return
+        waitingForActivity = true
+        application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityResumed(activity: Activity) {
+                application.unregisterActivityLifecycleCallbacks(this)
+                waitingForActivity = false
+                showIfNeeded(activity)
+            }
+            override fun onActivityCreated(activity: Activity, state: Bundle?) = Unit
+            override fun onActivityStarted(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivityStopped(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) = Unit
+            override fun onActivityDestroyed(activity: Activity) = Unit
+        })
     }
 
     fun show(activity: Activity) {
