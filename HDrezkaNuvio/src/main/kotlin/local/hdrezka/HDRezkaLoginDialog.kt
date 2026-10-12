@@ -21,21 +21,13 @@ internal object HDRezkaLoginDialog {
     fun showIfNeeded(context: Context) {
         if (shown) return
         val activity = context as? Activity ?: return
-        shown = true
-        CoroutineScope(Dispatchers.IO).launch {
-            val validSession = runCatching { HDRezkaSession.validate() }.getOrDefault(false)
-            if (!validSession && HDRezkaSession.hasSession()) HDRezkaSession.clear()
-            withContext(Dispatchers.Main) {
-                if (validSession) {
-                    shown = false
-                } else {
-                    show(activity)
-                }
-            }
-        }
+        if (!HDRezkaSession.claimLoginPrompt()) return
+        show(activity)
     }
 
-    private fun show(activity: Activity) {
+    fun show(activity: Activity) {
+        if (shown || activity.isFinishing || activity.isDestroyed) return
+        shown = true
         val padding = (24 * activity.resources.displayMetrics.density).toInt()
         val login = EditText(activity).apply {
             hint = "Логин или электронная почта"
@@ -57,9 +49,12 @@ internal object HDRezkaLoginDialog {
             .setTitle("HDRezka")
             .setMessage("Вход необязателен. Он открывает только возможности вашей учетной записи.")
             .setView(content)
-            .setNegativeButton("Без входа", null)
+            .setNegativeButton("Без входа") { _, _ -> HDRezkaSession.useGuestMode() }
             .setPositiveButton("Войти", null)
             .create()
+
+        dialog.setOnCancelListener { HDRezkaSession.useGuestMode() }
+        dialog.setOnDismissListener { shown = false }
 
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
@@ -74,7 +69,7 @@ internal object HDRezkaLoginDialog {
                     val success = runCatching {
                         HDRezkaSession.login(enteredLogin, enteredPassword)
                     }.onFailure {
-                        Log.e("HDRezkaAuth", "Login failed: ${it.javaClass.simpleName}: ${it.message}")
+                        Log.e("HDRezkaAuth", "Login failed: ${it.javaClass.simpleName}")
                     }.getOrDefault(false)
                     withContext(Dispatchers.Main) {
                         password.text?.clear()

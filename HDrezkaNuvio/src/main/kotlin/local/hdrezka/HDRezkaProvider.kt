@@ -139,10 +139,12 @@ class HDRezkaProvider : MainAPI() {
 
         val id = url.split("/").last().split("-").first()
         val title = (document.selectFirst("div.b-post__title h1")?.text()?.trim()
-            ?: document.selectFirst("div.b-post__origtitle")?.text()?.trim()).toString()
+            ?: document.selectFirst("div.b-post__origtitle")?.text()?.trim())
+            ?.takeIf { it.isNotBlank() }
+            ?: error("HDRezka не вернул карточку: доступ к странице ограничен")
         val poster = fixUrlNull(document.selectFirst("div.b-sidecover img")?.attr("src"))
         val year = document.select("div.film-info > div:nth-child(2) a").text().toIntOrNull()
-        val tvType = if (document.select("div#simple-episodes-tabs")
+        val tvType = if (document.select("#simple-episodes-tabs")
                 .isNullOrEmpty()
         ) TvType.Movie else TvType.TvSeries
         val description = document.selectFirst("div.b-post__description_text")?.text()?.trim()

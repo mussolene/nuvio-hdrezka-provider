@@ -33,7 +33,12 @@ internal object HDRezkaHttp {
         )
         HDRezkaSession.mergeCookies(response.cookies)
         val challenge = response.document.selectFirst("#anubis_challenge")?.text()?.trim()
-        if (challenge.isNullOrEmpty()) return response.document
+        if (challenge.isNullOrEmpty()) {
+            check(response.isSuccessful && response.text.isNotBlank()) {
+                "HDRezka: HTTP ${response.code}, сайт не вернул страницу"
+            }
+            return response.document
+        }
 
         val payload = mapper.readValue(challenge, AnubisChallenge::class.java)
             ?: error("Не удалось прочитать проверку Anubis")
@@ -72,6 +77,9 @@ internal object HDRezkaHttp {
             cookies = HDRezkaSession.cookies()
         )
         HDRezkaSession.mergeCookies(response.cookies)
+        check(response.isSuccessful && response.text.isNotBlank()) {
+            "HDRezka: HTTP ${response.code}, сайт не вернул страницу"
+        }
         check(response.document.selectFirst("#anubis_challenge") == null) {
             "Сайт повторно запросил проверку Anubis"
         }

@@ -35,8 +35,19 @@ internal object HDRezkaSession {
         return HDRezkaHttp.login(HDRezkaHttp.BASE_URL, login, password)
     }
 
-    suspend fun validate(): Boolean =
-        hasSession() && HDRezkaHttp.validateSession(HDRezkaHttp.BASE_URL)
+    fun claimLoginPrompt(): Boolean {
+        val prefs = preferences()
+        val process = android.os.Process.myPid()
+        synchronized(appContext) {
+            if (hasSession() || prefs.getBoolean("guest_mode", false) ||
+                prefs.getInt("prompt_process", -1) == process) return false
+            return prefs.edit().putInt("prompt_process", process).commit()
+        }
+    }
+
+    fun useGuestMode() {
+        preferences().edit().putBoolean("guest_mode", true).apply()
+    }
 
     fun mergeCookies(newCookies: Map<String, String>) {
         if (newCookies.isEmpty()) return
