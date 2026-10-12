@@ -229,7 +229,7 @@ class HDRezkaProvider : MainAPI() {
 
     private fun decryptStreamUrl(data: String): String {
         // If the URL is already in plain text (starts with quality marker like [360p]),
-        // skip decryption — HDrezka no longer encrypts stream URLs
+        // Прямые ссылки с метками качества не требуют расшифровки.
         if (data.startsWith("[")) return data
 
         fun getTrash(arr: List<String>, item: Int): List<String> {
@@ -311,23 +311,27 @@ class HDRezkaProvider : MainAPI() {
         subCallback: (SubtitleFile) -> Unit,
         sourceCallback: (ExtractorLink) -> Unit
     ) {
-        decryptStreamUrl(url).split(",").map { links ->
-            val quality =
-                Regex("\\[([0-9]{3,4}p\\s?\\w*?)]").find(links)?.groupValues?.getOrNull(1)
-                    ?.trim() ?: return@map null
-            links.replace("[$quality]", "").split(" or ")
-                .map {
-                    val link = it.trim()
-                    val type = if(link.contains(".m3u8")) "HLS" else "MP4"
-                    cleanCallback(
-                        "$source · $quality · $type",
-                        link,
-                        quality,
-                        link.contains(".m3u8"),
-                        sourceCallback,
-                    )
-                }
-        }
+        decryptStreamUrl(url).split(",").mapNotNull { links ->
+            val marker = Regex("\\[([0-9]{3,4}p\\s?\\w*?)]").find(links)
+                ?: return@mapNotNull null
+            marker.groupValues[1].trim() to links.removeRange(marker.range)
+        }.sortedByDescending { (quality, _) -> getQuality(quality) }
+            .forEach { (quality, links) ->
+                // Одна основная ссылка для каждого формата и качества.
+                links.split(" or ").map { it.trim() }.filter { it.isNotEmpty() }
+                    .distinctBy { it.contains(".m3u8") }
+                    .forEach { link ->
+                        val isHls = link.contains(".m3u8")
+                        val type = if (isHls) "HLS" else "MP4"
+                        cleanCallback(
+                            "$source · $quality · $type",
+                            link,
+                            quality,
+                            isHls,
+                            sourceCallback,
+                        )
+                    }
+            }
 
         subtitle.split(",").map { sub ->
             val language =
@@ -398,22 +402,24 @@ class HDRezkaProvider : MainAPI() {
                                     throw e
                                 } catch (e: Exception) {
                                     Log.w("HDRezkaStreams", "Ошибка озвучки ${server.translator_name}: ${e.javaClass.simpleName}")
-                                    return@withPermit
+                                    return@withPermit null
                                 }
-                                if (!response.isSuccessful) return@withPermit
+                                if (!response.isSuccessful) return@withPermit null
                                 val source = mapper.readValue(response.text, Sources::class.java)
                                 val streamUrl = source.url?.takeIf { it.isNotBlank() }
-                                    ?: return@withPermit
-                                invokeSources(
-                                    server.translator_name.orEmpty(),
-                                    streamUrl,
-                                    source.subtitle.toString(),
-                                    subtitleCallback,
-                                    callback
-                                )
+                                    ?: return@withPermit null
+                                server to source.copy(url = streamUrl)
                             }
                         }
-                    }.awaitAll()
+                    }.awaitAll().filterNotNull().forEach { (server, source) ->
+                        invokeSources(
+                            server.translator_name.orEmpty(),
+                            requireNotNull(source.url),
+                            source.subtitle.toString(),
+                            subtitleCallback,
+                            callback
+                        )
+                    }
                 }
             }
         }
