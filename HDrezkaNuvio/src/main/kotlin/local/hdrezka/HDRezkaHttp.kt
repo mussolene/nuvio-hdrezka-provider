@@ -24,11 +24,16 @@ internal object HDRezkaHttp {
     )
 
     suspend fun getDocument(url: String): Document {
+        val storedCookies = HDRezkaSession.cookies()
         var response = app.get(
             url,
             headers = headers(),
-            cookies = HDRezkaSession.cookies()
+            cookies = storedCookies
         )
+        val networkRequest = response.okhttpResponse.networkResponse?.request
+            ?: response.okhttpResponse.request
+        val sentCookies = CookieCodec.decode(networkRequest.header("Cookie").orEmpty())
+        Log.d("HDRezkaAuth", "http=${response.code}, stored=${storedCookies.keys.sorted()}, sent=${sentCookies.keys.sorted()}, matches=${storedCookies.all { (key, value) -> sentCookies[key] == value }}, loginForm=${response.document.selectFirst("form#check-form") != null}")
         HDRezkaSession.mergeCookies(response.cookies)
         val challenge = response.document.selectFirst("#anubis_challenge")?.text()?.trim()
         if (challenge.isNullOrEmpty()) {
