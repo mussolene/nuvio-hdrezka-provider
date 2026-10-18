@@ -121,22 +121,33 @@ class HDRezkaProvider : MainAPI() {
 
         val results = cards.map { it.toSearchResult() }.toMutableList()
         if (HDRezkaSearchParser.needsOriginalTitle(query)) {
-            val firstCard = cards.first()
-            val originalTitle = if (cards.size > 1) {
-                HDRezkaSearchParser.originalTitle(
-                    HDRezkaHttp.getDocument(firstCard.href)
-                )
-            } else {
-                null
+            val limit = Semaphore(3)
+            val aliases = coroutineScope {
+                cards.map { card ->
+                    async {
+                        val originalTitle = if (cards.size > 1) {
+                            limit.withPermit {
+                                HDRezkaSearchParser.originalTitle(
+                                    HDRezkaHttp.getDocument(card.href)
+                                )
+                            }
+                        } else {
+                            null
+                        }
+                        val matchingTitle = HDRezkaSearchParser.matchingTitle(
+                            query,
+                            cards.size,
+                            originalTitle
+                        )
+                        if (matchingTitle != null && !matchingTitle.equals(card.title, ignoreCase = true)) {
+                            card.toSearchResult(matchingTitle)
+                        } else {
+                            null
+                        }
+                    }
+                }.awaitAll().filterNotNull()
             }
-            val matchingTitle = HDRezkaSearchParser.matchingTitle(
-                query,
-                cards.size,
-                originalTitle
-            )
-            if (matchingTitle != null && !matchingTitle.equals(firstCard.title, ignoreCase = true)) {
-                results.add(0, firstCard.toSearchResult(matchingTitle))
-            }
+            results.addAll(0, aliases)
         }
         return results
     }
